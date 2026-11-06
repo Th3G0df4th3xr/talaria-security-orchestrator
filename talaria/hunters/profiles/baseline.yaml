@@ -1,0 +1,15 @@
+name: baseline
+version: 1
+checks:
+  - id: python-eval
+    enabled: true
+    severity: high
+    description: Dynamic evaluation via eval() requires manual review.
+    pattern: \beval\s*\(
+    extensions: [.py]
+  - id: possible-hardcoded-secret
+    enabled: true
+    severity: high
+    description: Possible hardcoded credential assignment; verify manually.
+    pattern: (?i)(api[_-]?key|secret|password|token)\s*[:=]\s*["'][^"']{8,}["']
+    extensions: [.py, .js, .ts, .java, .go, .rb, .yaml, .yml, .json]

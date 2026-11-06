@@ -1,0 +1,36 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.talaria/
+.env
+.DS_Store
+
+# Local backups and generated data
+*.pre-*
+*.backup
+*.bak
+*.phase1-backup
+
+# Local development backups
+*.pre-*
+*.backup
+*.bak
+*.phase1-backup
+*.db
+*.db-*
+
+# Python and tooling caches
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+# Temporary backup files
+*.dashboard-backup

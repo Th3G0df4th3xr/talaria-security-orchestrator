@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "talaria-security-orchestrator"
+version = "0.1.0"
+description = "Local-first application security scanning and finding orchestration MVP"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Talaria Contributors"}]
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.6", "PyYAML>=6.0", "GitPython>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.4", "build>=1.2"]
+dashboard = ["streamlit>=1.32", "plotly>=5.18", "requests>=2.31"]
+
+[project.scripts]
+talaria = "talaria.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["talaria"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+
+[tool.hatch.build]
+exclude = [
+    "**/*.pre-*",
+    "**/*.backup",
+    "**/*.bak",
+    "**/*.phase1-backup",
+    ".talaria/**",
+    "reports/**",
+    ".venv/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    "dist/**",
+    "build/**",
+]
