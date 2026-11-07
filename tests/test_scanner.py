@@ -1,4 +1,7 @@
 
+import hashlib
+from pathlib import Path
+
 import pytest
 
 from talaria.database import Database
@@ -10,7 +13,15 @@ def test_scan_finds_eval_and_persists(isolated_db, git_repo):
     result = ScanService(db).scan(str(git_repo))
 
     assert result["finding_count"] >= 1
+    assert len(result["commit_sha"]) == 40
+    assert result["branch"]
     assert any(item["rule_id"] == "python-eval" for item in result["findings"])
+    finding = next(
+        item for item in result["findings"] if item["rule_id"] == "python-eval"
+    )
+    assert finding["source_sha256"] == hashlib.sha256(
+        (git_repo / "app.py").read_bytes()
+    ).hexdigest()
 
     findings = db.execute("SELECT * FROM findings")
     occurrences = db.execute("SELECT * FROM finding_occurrences")
@@ -177,3 +188,26 @@ def test_scanner_does_not_follow_symlinked_files(isolated_db, git_repo, tmp_path
     result = scanner.scan(str(git_repo))
 
     assert not any(item["path"] == "linked.py" for item in result["findings"])
+
+
+def test_scanner_rejects_file_replaced_with_symlink_before_secure_open(
+    isolated_db, git_repo, tmp_path, monkeypatch
+):
+    import talaria.scanning.service as scanning
+
+    source = git_repo / "app.py"
+    external = tmp_path / "external.py"
+    external.write_text("value = eval(secret_input)\n", encoding="utf-8")
+    secure_read = scanning.read_regular_file_beneath
+
+    def replace_before_open(root, relative, maximum_bytes):
+        if Path(relative).as_posix() == "app.py":
+            source.unlink()
+            source.symlink_to(external)
+        return secure_read(root, relative, maximum_bytes)
+
+    monkeypatch.setattr(scanning, "read_regular_file_beneath", replace_before_open)
+
+    result = ScanService(Database(isolated_db / "symlink-race.db")).scan(str(git_repo))
+
+    assert not any(item["path"] == "app.py" for item in result["findings"])

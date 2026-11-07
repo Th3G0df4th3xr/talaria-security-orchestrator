@@ -3,6 +3,8 @@
 ## 1. Current relationships
 
 ```text
+Organization (1) -- (*) GitHubRepository
+GitHubRepository (1) -- (*) GitHubCheckRun
 repositories (1) -------- (many) scans
 repositories (1) -------- (many) findings
 scans       (1) -------- (many) findings
@@ -35,11 +37,13 @@ A `FindingOccurrence` joins one canonical finding to one scan. The combination o
 - FindingOccurrence: scan-specific location and evidence.
 - AuditEvent: actor, event type, object reference, timestamp, correlation ID, safe structured details.
 - Approval: human decision, reviewer identity, scope, decision, timestamp, and rationale (future).
-- IntegrationRecord: provider identity and synchronization state (future).
+- GitHubCheckRun: provider check-run identity, commit, validated status and
+  bounded result metadata; one row is keyed by provider repository and check-run
+  ID, and inherits its tenant boundary through the repository mapping.
 
 ## 5. Referential integrity
 
-Use explicit foreign keys with deliberate delete behavior. Prefer soft deletion or archival for repositories and findings where audit history must remain. Avoid cascading deletion of audit evidence. Enforce foreign keys on every SQLite connection, not just during schema initialization.
+Use explicit foreign keys with deliberate delete behavior. Prefer soft deletion or archival for repositories and findings where audit history must remain. Avoid cascading deletion of audit evidence. SQLite connections enable foreign keys individually; PostgreSQL enforces its declared constraints directly.
 
 ## 6. Migration approach
 

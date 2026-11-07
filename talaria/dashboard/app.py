@@ -17,7 +17,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-client = TalariaAPIClient()
+def persist_tokens(access_token, refresh_token):
+    if access_token and refresh_token:
+        st.session_state["talaria_access_token"] = access_token
+        st.session_state["talaria_refresh_token"] = refresh_token
+    else:
+        st.session_state.pop("talaria_access_token", None)
+        st.session_state.pop("talaria_refresh_token", None)
+
+
+client = TalariaAPIClient(token_callback=persist_tokens)
+client.access_token = st.session_state.get("talaria_access_token")
+client.refresh_token = st.session_state.get("talaria_refresh_token")
+client.organization_id = st.session_state.get("talaria_organization_id")
 
 st.markdown(
     """
@@ -44,7 +56,10 @@ def load_data():
         "scans": client.scans(),
         "severity": client.severity(),
         "trends": client.trends(days=30),
-        "findings": client.findings(),
+        "findings": client.findings(
+            limit=100,
+            offset=st.session_state.get("talaria_findings_offset", 0),
+        ),
     }
 
 
@@ -63,6 +78,60 @@ st.sidebar.caption("Local-first • API-driven • Human-controlled")
 
 st.title("Security Command Center")
 st.caption("Repository intelligence · Scan operations · Finding lifecycle")
+
+if not client.access_token:
+    with st.form("talaria_login"):
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign in", type="primary")
+    if submitted:
+        try:
+            tokens = client.login(email, password)
+            client.organization_id = None
+            st.session_state.pop("talaria_organization_id", None)
+            st.session_state["talaria_access_token"] = tokens["access_token"]
+            st.session_state["talaria_refresh_token"] = tokens["refresh_token"]
+            st.rerun()
+        except DashboardAPIError as exc:
+            st.error(str(exc))
+    st.stop()
+
+try:
+    identity = client.me()
+except DashboardAPIError as exc:
+    st.error(f"Sign-in is no longer valid: {exc}")
+    if st.button("Return to sign in"):
+        st.session_state.pop("talaria_access_token", None)
+        st.session_state.pop("talaria_refresh_token", None)
+        st.rerun()
+    st.stop()
+
+memberships = identity.get("memberships", [])
+if len(memberships) == 1:
+    client.organization_id = memberships[0]["organization_id"]
+    st.session_state["talaria_organization_id"] = client.organization_id
+elif memberships:
+    selected_org = st.selectbox(
+        "Organization",
+        memberships,
+        format_func=lambda item: f"{item['organization']} · {item['role']}",
+        key="talaria_organization_choice",
+    )
+    client.organization_id = selected_org["organization_id"]
+    st.session_state["talaria_organization_id"] = client.organization_id
+else:
+    st.error("This account has no active organization membership.")
+    st.stop()
+
+if st.sidebar.button("Sign out", use_container_width=True):
+    client.logout()
+    for key in (
+        "talaria_access_token",
+        "talaria_refresh_token",
+        "talaria_organization_id",
+    ):
+        st.session_state.pop(key, None)
+    st.rerun()
 
 try:
     data = load_data()
@@ -266,6 +335,8 @@ if scans:
         for column in (
             "id",
             "repository",
+            "branch",
+            "commit_sha",
             "started_at",
             "completed_at",
             "status",
@@ -286,6 +357,26 @@ st.divider()
 
 # Finding management
 st.subheader("Finding Management")
+
+finding_offset = st.session_state.get("talaria_findings_offset", 0)
+total_findings = finding_stats.get("total", 0)
+max_finding_offset = max(0, ((total_findings - 1) // 100) * 100)
+if finding_offset > max_finding_offset:
+    finding_offset = max_finding_offset
+    st.session_state["talaria_findings_offset"] = finding_offset
+    st.rerun()
+page_left, page_label, page_right = st.columns([1, 3, 1])
+if page_left.button("← Previous", disabled=finding_offset == 0):
+    st.session_state["talaria_findings_offset"] = max(0, finding_offset - 100)
+    st.rerun()
+if page_right.button(
+    "Next →", disabled=finding_offset + 100 >= total_findings
+):
+    st.session_state["talaria_findings_offset"] = finding_offset + 100
+    st.rerun()
+page_start = min(finding_offset + 1, total_findings) if total_findings else 0
+page_end = min(finding_offset + 100, total_findings)
+page_label.caption(f"Showing findings {page_start}–{page_end} of {total_findings}")
 
 if findings:
     filter_columns = st.columns(3)
@@ -409,6 +500,17 @@ if findings:
                     )
                 else:
                     st.caption("No occurrence history available.")
+
+                st.caption(
+                    "AI investigation is opt-in. Repository source is sent only "
+                    "when the server enables source sharing."
+                )
+                if st.button("Run AI investigation", key=f"ai_investigate_{selected_id}"):
+                    try:
+                        result = client.investigate_finding(selected_id)
+                        st.json(result["investigation"])
+                    except DashboardAPIError as exc:
+                        st.error(str(exc))
 
             current_status = detail.get("status", "")
             all_statuses = [

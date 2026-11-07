@@ -1,17 +1,23 @@
 # Roadmap
 
-## v0.1 — Local MVP
+See [IMPLEMENTATION_TRACKER.md](IMPLEMENTATION_TRACKER.md) for the detailed
+requirements and current evidence. TALARIA is not production-ready until the
+open acceptance items in that tracker are closed.
 
-Repository registration, YAML checks, bounded local scanning, finding deduplication, SQLite, CLI, API, tests, and JSON export.
+## Next milestones
 
-## v0.2 — Better analysis
-
-Pluggable SAST adapters (for example Semgrep), richer language-aware parsing, confidence calibration, suppression workflow, and HTML reports.
-
-## v0.3 — Human-governed integrations
-
-GitHub read-only metadata integration, reviewable security PR proposals, explicit authorization, approval records, and integration tests against disposable repositories.
-
-## Later
-
-Optional LLM investigation adapter, enterprise identity/RBAC, policy management, distributed workers, metrics, and deployment hardening. Each requires threat modelling and human oversight.
+1. Validate PostgreSQL migrations, import, backup and restore against an
+   ephemeral PostgreSQL service in CI and on the selected Docker VM; perform a
+   restore drill and add encrypted off-host retention.
+2. Complete organization-bound GitHub onboarding and connect scans,
+   investigations, approvals, branch/PR publication, checks, and webhook
+   updates into one persisted workflow. Keep provider writes disabled until
+   mocked acceptance passes and a disposable repository is explicitly selected.
+3. Add persisted AI investigation history, retention, grounding/security
+   evaluations, and failure testing. Keep source sharing disabled unless the
+   operator enables it after provider data review.
+4. Close operational gaps for TLS ingress, shared rate limiting, metrics,
+   centralized redacted logs, dependency/container scan execution, and
+   incident/backup runbooks.
+5. Run end-to-end failure and recovery acceptance on the selected Docker VM
+   topology and obtain an independent security review.

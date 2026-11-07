@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-Automated GitHub pull-request creation is planned, not implemented in the current MVP. This document defines the target controlled workflow and must not be read as a claim that TALARIA currently creates or merges PRs.
+The GitHub adapter has approval-gated branch and idempotent pull-request methods, but TALARIA does not yet orchestrate the full scan-to-verified-PR workflow. This document defines that target workflow; live provider acceptance and state synchronization remain outstanding.
 
 ## 2. Target sequence
 

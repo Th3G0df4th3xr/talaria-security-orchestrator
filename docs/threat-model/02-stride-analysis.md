@@ -15,7 +15,7 @@
 ## STRIDE notes
 
 - **Spoofing:** Localhost binding reduces network exposure but does not authenticate local processes.
-- **Tampering:** Database consistency depends on enabling SQLite foreign keys on each connection and using atomic transactions.
+- **Tampering:** SQLite foreign keys are enabled on each connection; PostgreSQL uses database constraints. Both backends use atomic transactions, and PostgreSQL refuses mismatched baseline schemas.
 - **Repudiation:** Basic event records are not equivalent to tamper-proof audit logging.
 - **Information disclosure:** Source snippets and file paths can contain proprietary or sensitive material.
 - **Denial of service:** Per-file size checks alone do not bound total repository cost or pathological regular expressions.

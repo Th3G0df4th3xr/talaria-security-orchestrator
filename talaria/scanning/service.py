@@ -1,9 +1,13 @@
+import hashlib
 import json
 import logging
 import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+
+from git import InvalidGitRepositoryError, Repo
+from git.exc import BadName
 
 from talaria.config import max_file_bytes
 from talaria.database import Database
@@ -14,6 +18,11 @@ from talaria.notifications.base import NotificationAdapter
 from talaria.remediation.advisor import advise
 from talaria.repositories.service import RepositoryService
 from talaria.scanning.limits import ScanLimits
+from talaria.security.filesystem import (
+    SecureFileAccessUnavailable,
+    SecureFileError,
+    read_regular_file_beneath,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,25 +48,32 @@ class ScanService:
         db: Database,
         limits: ScanLimits | None = None,
         notifier: NotificationAdapter | None = None,
+        allowed_roots: tuple[Path, ...] | None = None,
     ):
         self.db = db
         self.limits = limits or ScanLimits(max_file_bytes=max_file_bytes())
-        self.repositories = RepositoryService(db)
+        self.repositories = RepositoryService(db, allowed_roots)
         self.notifier = notifier
 
-    def scan(self, supplied_path: str, profile_name: str = "baseline") -> dict:
+    def scan(
+        self,
+        supplied_path: str,
+        profile_name: str = "baseline",
+        organization_id: str | None = None,
+    ) -> dict:
         # Validate the profile before creating a scan record.
         profile = load_profile(profile_name)
 
-        repository = self.repositories.register(supplied_path)
+        repository = self.repositories.register(supplied_path, organization_id)
         root = Path(repository["path"])
+        branch, commit_sha = _repository_revision(root)
 
         scan_id = self.db.insert(
             """
-            INSERT INTO scans(repository_id, status)
-            VALUES (?, 'running')
+            INSERT INTO scans(repository_id, branch, commit_sha, status)
+            VALUES (?, ?, ?, 'running')
             """,
-            (repository["id"],),
+            (repository["id"], branch, commit_sha),
         )
 
         try:
@@ -134,22 +150,16 @@ class ScanService:
                     ),
                 )
 
-                connection.execute(
-                    """
-                    INSERT INTO audit_events(event, details)
-                    VALUES (?, ?)
-                    """,
-                    (
-                        "scan.completed",
-                        json.dumps(
-                            {
-                                "scan_id": scan_id,
-                                "repository_id": repository["id"],
-                                "finding_count": len(found),
-                            },
-                            sort_keys=True,
-                        ),
-                    ),
+                self.db.audit_in_transaction(
+                    connection,
+                    "scan.completed",
+                    {
+                        "scan_id": scan_id,
+                        "repository_id": repository["id"],
+                        "branch": branch,
+                        "commit_sha": commit_sha,
+                        "finding_count": len(found),
+                    },
                 )
 
             self._notify(
@@ -166,6 +176,8 @@ class ScanService:
                 "scan_id": scan_id,
                 "repository": repository,
                 "profile": profile["name"],
+                "branch": branch,
+                "commit_sha": commit_sha,
                 "finding_count": len(found),
                 "findings": found,
             }
@@ -189,22 +201,14 @@ class ScanService:
                     ),
                 )
 
-                connection.execute(
-                    """
-                    INSERT INTO audit_events(event, details)
-                    VALUES (?, ?)
-                    """,
-                    (
-                        "scan.failed",
-                        json.dumps(
-                            {
-                                "scan_id": scan_id,
-                                "repository_id": repository["id"],
-                                "error_type": type(exc).__name__,
-                            },
-                            sort_keys=True,
-                        ),
-                    ),
+                self.db.audit_in_transaction(
+                    connection,
+                    "scan.failed",
+                    {
+                        "scan_id": scan_id,
+                        "repository_id": repository["id"],
+                        "error_type": type(exc).__name__,
+                    },
                 )
 
             self._notify(
@@ -297,12 +301,28 @@ class ScanService:
                     )
 
                 try:
-                    content = file_path.read_text(
-                        encoding="utf-8",
-                        errors="replace",
+                    raw_content = read_regular_file_beneath(
+                        root, relative_path, self.limits.max_file_bytes
                     )
+                except SecureFileAccessUnavailable as exc:
+                    raise RuntimeError(
+                        "Secure repository scanning is unsupported on this platform"
+                    ) from exc
+                except SecureFileError as exc:
+                    if "size limit" in str(exc):
+                        raise ScanLimitExceeded(
+                            f"File exceeds max_file_bytes: {relative_path}"
+                        ) from exc
+                    continue
                 except OSError:
                     continue
+                total_bytes += len(raw_content) - size
+                if total_bytes > self.limits.max_total_bytes:
+                    raise ScanLimitExceeded(
+                        f"Scan exceeds max_total_bytes ({self.limits.max_total_bytes})"
+                    )
+                content = raw_content.decode("utf-8", errors="replace")
+                source_sha256 = hashlib.sha256(raw_content).hexdigest()
 
                 relative = relative_path.as_posix()
 
@@ -324,6 +344,7 @@ class ScanService:
                             "path": relative,
                             "line": line_number,
                             "snippet": line.strip()[:240],
+                            "source_sha256": source_sha256,
                         }
 
                         item["fingerprint"] = fingerprint(
@@ -338,3 +359,22 @@ class ScanService:
                         found.append(item)
 
         return found
+
+
+def _repository_revision(root: Path) -> tuple[str | None, str | None]:
+    try:
+        repository = Repo(root)
+    except InvalidGitRepositoryError:
+        return None, None
+    try:
+        try:
+            branch = repository.active_branch.name
+        except TypeError:
+            branch = None
+        try:
+            commit_sha = repository.head.commit.hexsha
+        except (BadName, ValueError, TypeError):
+            commit_sha = None
+        return branch, commit_sha
+    finally:
+        repository.close()

@@ -1,24 +1,43 @@
 import json
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
 
 from talaria.api import app
 from talaria.config import database_path
-from talaria.database import Database
+from talaria.database import CURRENT_SCHEMA_VERSION, Database
 
 
 @pytest.fixture
-def api_environment(isolated_db):
+def api_environment(isolated_db, monkeypatch):
+    monkeypatch.setenv("TALARIA_JWT_SECRET", "unit-test-signing-secret-32-bytes-minimum")
+    monkeypatch.setenv("TALARIA_BOOTSTRAP_TOKEN", "unit-test-bootstrap-secret")
     db = Database(database_path())
     client = TestClient(app)
-    return client, db
+    bootstrap = client.post(
+        "/auth/bootstrap",
+        headers={"X-Talaria-Bootstrap-Token": "unit-test-bootstrap-secret"},
+        json={
+            "email": "admin@example.test",
+            "password": "a-long-test-password",
+            "organization_name": "Example Org",
+        },
+    )
+    assert bootstrap.status_code == 201
+    organization_id = bootstrap.json()["organization_id"]
+    tokens = client.post(
+        "/auth/login",
+        json={"email": "admin@example.test", "password": "a-long-test-password"},
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {tokens['access_token']}"})
+    return client, db, organization_id
 
 
-def seed_dashboard_data(db):
+def seed_dashboard_data(db, organization_id):
     repository_id = db.insert(
-        "INSERT INTO repositories(name, path) VALUES (?, ?)",
-        ("sample-repo", "/tmp/sample-repo"),
+        "INSERT INTO repositories(name, path, organization_id) VALUES (?, ?, ?)",
+        ("sample-repo", "/tmp/sample-repo", organization_id),
     )
 
     scan_id = db.insert(
@@ -75,16 +94,62 @@ def seed_dashboard_data(db):
 
 
 def test_health_endpoint(api_environment):
-    client, _ = api_environment
+    client, _, _ = api_environment
 
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
+    protected = client.get("/repositories", headers={"Authorization": ""})
+    assert protected.status_code == 401
+    assert protected.headers["X-Content-Type-Options"] == "nosniff"
+    assert protected.headers["X-Frame-Options"] == "DENY"
+
+
+def test_readiness_probe_reports_current_schema(api_environment):
+    client, _, _ = api_environment
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == CURRENT_SCHEMA_VERSION
+
+
+def test_readiness_does_not_migrate_legacy_database(tmp_path, monkeypatch):
+    path = tmp_path / "legacy.db"
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        "CREATE TABLE legacy_marker(value TEXT); PRAGMA user_version = 0;"
+    )
+    connection.commit()
+    connection.close()
+    monkeypatch.setenv("TALARIA_DATABASE", str(path))
+
+    response = TestClient(app).get("/health/ready")
+
+    assert response.status_code == 503
+    connection = sqlite3.connect(path)
+    assert connection.execute("PRAGMA user_version").fetchone()[0] == 0
+    assert connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+    ).fetchall() == [("legacy_marker",)]
+    connection.close()
+
+
+def test_readiness_does_not_create_missing_database(tmp_path, monkeypatch):
+    path = tmp_path / "missing" / "talaria.db"
+    monkeypatch.setenv("TALARIA_DATABASE", str(path))
+
+    response = TestClient(app).get("/health/ready")
+
+    assert response.status_code == 503
+    assert not path.exists()
+    assert not path.parent.exists()
+
 
 def test_dashboard_summary_empty_database(api_environment):
-    client, _ = api_environment
+    client, _, _ = api_environment
 
     response = client.get("/dashboard/summary")
 
@@ -97,8 +162,8 @@ def test_dashboard_summary_empty_database(api_environment):
 
 
 def test_dashboard_summary_with_data(api_environment):
-    client, db = api_environment
-    seed_dashboard_data(db)
+    client, db, org_id = api_environment
+    seed_dashboard_data(db, org_id)
 
     response = client.get("/dashboard/summary")
 
@@ -115,8 +180,8 @@ def test_dashboard_summary_with_data(api_environment):
 
 
 def test_scan_history(api_environment):
-    client, db = api_environment
-    seed_dashboard_data(db)
+    client, db, org_id = api_environment
+    seed_dashboard_data(db, org_id)
 
     response = client.get("/scans")
 
@@ -125,20 +190,21 @@ def test_scan_history(api_environment):
 
     assert len(data) == 1
     assert data[0]["repository"] == "sample-repo"
+    assert data[0]["branch"] is None
     assert data[0]["status"] == "completed"
     assert data[0]["finding_count"] == 3
 
 
 def test_scan_history_rejects_invalid_limit(api_environment):
-    client, _ = api_environment
+    client, _, _ = api_environment
 
     assert client.get("/scans?limit=0").status_code == 422
     assert client.get("/scans?limit=501").status_code == 422
 
 
 def test_dashboard_severity_distribution(api_environment):
-    client, db = api_environment
-    seed_dashboard_data(db)
+    client, db, org_id = api_environment
+    seed_dashboard_data(db, org_id)
 
     response = client.get("/dashboard/severity")
 
@@ -153,8 +219,8 @@ def test_dashboard_severity_distribution(api_environment):
 
 
 def test_dashboard_trends(api_environment):
-    client, db = api_environment
-    seed_dashboard_data(db)
+    client, db, org_id = api_environment
+    seed_dashboard_data(db, org_id)
 
     response = client.get("/dashboard/trends?days=30")
 
@@ -169,7 +235,7 @@ def test_dashboard_trends(api_environment):
 
 @pytest.mark.parametrize("days", [0, 366])
 def test_dashboard_trends_rejects_invalid_days(api_environment, days):
-    client, _ = api_environment
+    client, _, _ = api_environment
 
     response = client.get(f"/dashboard/trends?days={days}")
 

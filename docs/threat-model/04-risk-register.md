@@ -4,7 +4,7 @@ Likelihood and impact are qualitative: Low, Medium, High. Ratings describe the c
 
 | ID | Risk | Likelihood | Impact | Priority | Treatment / acceptance criteria |
 |---|---|---:|---:|---:|---|
-| R-01 | API has no authentication/RBAC | Medium | High | Critical | Keep loopback-only; implement authz before shared exposure |
+| R-01 | API auth/RBAC has not completed production review | Medium | High | High | JWT, tenant checks, and basic RBAC implemented; keep loopback-only and complete route-matrix review |
 | R-02 | Repository path can exceed intended scan scope | Medium | High | High | Allowlisted roots, canonical paths, symlink escape tests |
 | R-03 | Scanner resource exhaustion | Medium | High | High | Bound file count, bytes, time, regex cost, concurrency |
 | R-04 | Finding-to-scan foreign-key inconsistency | Medium | High | High | Foreign keys per connection, atomic writes, migration and integrity tests |

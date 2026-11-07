@@ -1,0 +1,18 @@
+{$TALARIA_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+	@api {
+		path /health /health/* /auth /auth/* /repositories /repositories/* /scans /scans/* /dashboard /dashboard/* /findings /findings/* /investigations /integrations /integrations/*
+	}
+	handle @api {
+		reverse_proxy talaria-api:8000
+	}
+	handle {
+		reverse_proxy talaria-dashboard:8501
+	}
+}

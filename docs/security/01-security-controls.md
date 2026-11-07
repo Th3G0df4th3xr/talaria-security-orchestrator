@@ -8,17 +8,21 @@ Protect repository confidentiality, database integrity, operator control, and th
 
 | Control | Current state | Required next step |
 |---|---|---|
-| Local repository validation | Implemented in repository service | Add explicit allowlisted roots and symlink tests |
+| Local repository validation | Git roots validated; API roots default to cwd or configured allowlist; symlinks excluded | Expand filesystem race and production-root tests |
 | YAML hunter profiles | Implemented | Schema validation and safe-regex controls |
 | Finding fingerprinting | Implemented | Separate canonical findings from occurrences |
-| SQLite persistence | Implemented | Enable foreign keys per connection; transactional scan writes; migrations |
-| Audit events | Basic event writes implemented | Actor identity, event coverage, tamper resistance, retention |
-| API request validation | Pydantic models | Add authorization before network exposure |
-| Authentication/RBAC | Not implemented | Required before shared deployment |
-| Secret management | Local example configuration only | Use OS credential store/secret manager |
-| Scan resource limits | Basic per-file size setting | Add file count, total bytes, timeout, symlink and cancellation controls |
-| AI safety | No active AI investigation | Threat model and evaluation before enablement |
-| GitHub write controls | Not implemented | Least privilege and human approval |
+| Persistence | SQLite v16 checksummed migrations, serialized upgrades, verified copy/restore, legacy recovery, tenant-bound GitHub repository mappings, and append-only chained audit rows; PostgreSQL v11 baseline plus v12–v16 migrations, shared throttling buckets, audit-chain verification, readiness checks, and guarded SQLite import | Live PostgreSQL acceptance, encrypted off-host backups, restore drills, immutable external audit checkpoints, and operational rollback |
+| Audit and request events | Database audit events plus redacted JSON HTTP request logs and request IDs | Retention policy, tamper-resistant export, centralized collection, and alerts |
+| API request validation | Strict Pydantic inputs, bearer dependencies, organization scoping, and representative role/action matrix | Independent exhaustive authorization and abuse review |
+| Authentication/RBAC | JWT, Argon2id, rotating/revocable sessions, organizations, memberships, route role checks, and shared database-backed throttling | MFA/SSO decision, live PostgreSQL throttling acceptance, and production acceptance |
+| Secret management | Environment, Docker secret, and Kubernetes Secret hooks; examples contain placeholders | Select and validate a production secret manager; rotate credentials operationally |
+| Outbound credential transport | GitHub App and LLM HTTP clients reject redirects, preventing `urllib` from forwarding bearer credentials to a redirect target | Validate provider behavior in staging and retain strict TLS/egress policy |
+| Dashboard credential transport | Dashboard API client rejects non-TLS remote origins and URL userinfo, query, fragment, path-prefix, and ambiguous authority forms; HTTP is limited to loopback and the exact Compose API service | Validate the UI-to-API network boundary and TLS termination in the target deployment |
+| PostgreSQL transport | TLS is required unless the exact database hostname appears in `TALARIA_DATABASE_TRUSTED_HOSTS`; the plaintext exception rejects hostaddr/service routing overrides; Compose trusts only its internal `postgres` service name | Prefer `sslmode=verify-full` with managed CA roots; `sslmode=require` encrypts without authenticating the server; validate certificate rotation and trusted network at deployment |
+| CI supply chain | GitHub Actions are pinned to full commit SHAs; Dependabot checks action, container, and Python dependencies weekly | Review and merge update proposals; verify CI and security scan runs |
+| Scan resource limits | File, byte, depth, and profile limits; API repository-root allowlist | Load tests, cancellation, and resource measurements for production workloads |
+| AI safety | Opt-in analysis-only LLM adapter with no tools; bounded source context, heuristic source/response credential redaction, and evidence-reference validation | Redaction cannot guarantee all secrets; adversarial evaluations, execution isolation, and reviewer workflow remain |
+| GitHub write controls | Branch/PR adapter methods require persisted second-person approval | Repository onboarding, full orchestration, live acceptance, and state synchronization |
 
 ## 3. Repository access
 
@@ -34,11 +38,11 @@ Never log credentials or full environment contents. Redact likely secrets from s
 
 ## 6. API controls
 
-Until authentication and authorization are implemented, bind the API to loopback only. Validate all inputs, avoid leaking absolute paths or stack traces, and disable permissive cross-origin access. Add rate limits and job concurrency limits before shared use.
+The API requires bearer authentication for protected application routes and scopes core records to an organization. Readiness checks are read-only and require the current migration checksum history. Keep it bound to loopback until the selected TLS boundary, shared rate limits, deployment controls, and independent authorization review are complete. Validate all inputs, avoid leaking absolute paths or stack traces, and keep cross-origin access disabled unless explicitly configured.
 
 ## 7. Database and audit
 
-Enable foreign keys on every SQLite connection. Use transactions for state transitions. Add migrations and backup/restore tests. Audit registration, scan start/completion/failure, finding status changes, approvals, and integration actions. Do not include secrets or unnecessary source content in audit details.
+Enable foreign keys on every SQLite connection. PostgreSQL enforces database constraints and uses transactional row locks for concurrent bootstrap and refresh rotation. Use immediate SQLite transactions for state transitions and migrations. Back up before schema upgrades, verify recovery copies, and audit registration, scan start/completion/failure, finding status changes, approvals, and integration actions. Do not include secrets or unnecessary source content in audit details.
 
 ## 8. Release gate
 

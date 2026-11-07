@@ -18,9 +18,9 @@ Scanning Service	talaria/scanning/	Traverses source files and executes checks	Im
 Finding Normalizer	talaria/findings/	Generates finding fingerprints	Implemented
 Investigation Engine	talaria/investigation/	Performs deterministic initial triage	Implemented
 Remediation Advisor	talaria/remediation/	Provides rule-based remediation guidance	Implemented
-Database Layer	talaria/database.py	SQLite persistence and audit events	Implemented
+Database Layer	talaria/database.py	SQLite persistence locally and PostgreSQL baseline for Docker Compose	Partial; PostgreSQL runtime acceptance pending
 Data Models	talaria/models.py	API request models	Implemented
-AI Investigation Adapter	Planned	LLM-assisted investigation	Planned
+AI Investigation Adapter	talaria/integrations/llm.py	Opt-in bounded analysis-only provider adapter	Implemented; workflow wiring remains
 Policy Engine	Planned	Enforces action authorization	Planned
 GitHub Integration	Planned	Repository and pull request integration	Planned
 Approval Service	Planned	Records human approval decisions	Planned
@@ -47,7 +47,7 @@ Current endpoints:
 * GET /findings
 * GET /findings/{finding_id}
 
-The API currently has no authentication or authorization layer. It must remain restricted to localhost until appropriate access controls are implemented.
+The API has bearer authentication, organization membership checks, and role enforcement on core routes. Keep it restricted to localhost until production hardening and the complete route/role review are finished.
 
 3.2 Repository Service
 
@@ -168,7 +168,7 @@ Future capabilities:
 
 3.8 Persistence Layer
 
-Current technology: SQLite.
+Local development uses SQLite. The Compose single-host topology uses PostgreSQL schema v16; its runtime and backup/restore acceptance remain pending.
 
 Current entities:
 

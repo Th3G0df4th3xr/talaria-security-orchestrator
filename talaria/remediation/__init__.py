@@ -1,1 +1,1 @@
-"""Human-reviewed remediation advice."""
+"""Human-reviewed remediation helpers."""

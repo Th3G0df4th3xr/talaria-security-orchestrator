@@ -27,17 +27,17 @@ TALARIA is a local-first application security orchestration platform designed to
 | Finding normalization | Fingerprinting | Implemented |
 | Investigation | Deterministic engine | Implemented |
 | Remediation advice | Rule-based suggestions | Implemented |
-| Persistence | SQLite | Implemented |
+| Persistence | SQLite locally; PostgreSQL v11 baseline plus checksummed v12–v16 migrations for Docker Compose | SQLite verified; PostgreSQL live acceptance and incremental migration work remain |
 | REST API | FastAPI | Implemented |
 | CLI | Python | Implemented |
-| Audit events | SQLite | Implemented |
-| Authentication and RBAC | Planned | Not implemented |
-| Application ownership | Planned | Not implemented |
-| AI investigation | LLM integration | Planned |
-| Patch generation | Controlled workflow | Planned |
-| GitHub integration | GitHub App | Planned |
-| Pull request orchestration | Approval workflow | Planned |
-| Remediation verification | Re-scanning | Planned |
+| Audit events | Configured database | Implemented for SQLite; PostgreSQL path awaits live acceptance |
+| Authentication and RBAC | Partial | JWT, Argon2id, organization memberships, role checks, and tenant-scoped core endpoints implemented; production hardening remains |
+| Application ownership | Organizations and memberships | Core tenant ownership and role checks implemented; full role/action review remains |
+| AI investigation | Opt-in provider adapter | Analysis adapter and bounded context collection implemented; authorization wiring and evaluation remain |
+| Patch generation | Temporary-copy validator | Base-commit-bound proposal generation and syntax validation implemented; test/policy workflow remains |
+| GitHub integration | GitHub App and webhook adapters | App auth, read/write methods, signature checks, and delivery deduplication implemented; live setup and workflow sync remain |
+| Pull request orchestration | Approval-gated adapter methods | Branch/PR methods require persisted approval; end-to-end orchestration remains |
+| Remediation verification | Re-scanning | Not implemented |
 
 ## 4. High-Level Architecture
 
@@ -96,7 +96,7 @@ TALARIA is a local-first application security orchestration platform designed to
        |
        +---- Notification Engine
 
-These are planned components, not currently implemented services.
+This is the target end-to-end architecture. Some adapters and approval controls exist, but orchestration, provider synchronization, and verification services remain to be implemented.
 
 ## 6. Trust Boundaries
 
@@ -125,8 +125,8 @@ These are planned components, not currently implemented services.
 
 TALARIA is currently a local-first MVP.
 
-It does not yet provide production authentication, role-based access control, multi-tenant isolation, distributed scanning, full semantic SAST, AI-powered investigation, automated patch generation, GitHub integration, or enterprise notification workflows.
+It does not yet provide production-grade identity/RBAC, distributed scanning, full semantic SAST, persisted AI investigation history, automated patch publication, completed GitHub PR workflows, or enterprise notification workflows.
 
 The regex-based scanner identifies patterns requiring investigation. It does not establish exploitability or prove a vulnerability.
 
-The API must remain restricted to localhost until authentication and access controls are implemented.
+The API must remain restricted to localhost until deployment hardening and the remaining authorization review are complete.

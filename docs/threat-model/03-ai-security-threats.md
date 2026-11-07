@@ -2,14 +2,14 @@
 
 ## 1. Applicability
 
-This document describes risks for a future AI investigation or agentic workflow. The current MVP's deterministic investigation engine is not an LLM agent. Do not treat planned AI controls as implemented.
+This document describes risks for the opt-in finding investigation endpoint and any future agentic workflow. The endpoint is advisory only, uses an authenticated tenant-scoped finding, and has no repository tools. Do not treat remaining evaluation and data-governance work as implemented.
 
 ## 2. Threat scenarios
 
 ### Indirect prompt injection
 An attacker places instructions in source comments, README files, issue text, dependency metadata, or test fixtures. The model reads the content as evidence and treats it as instructions.
 
-**Controls:** Label repository content as untrusted, delimit evidence, use fixed system instructions, prohibit instruction following from evidence, and test adversarial repositories.
+**Controls:** When source sharing is explicitly enabled, collect a bounded source excerpt from configured roots, label repository content as untrusted, use fixed system instructions, prohibit instruction following from evidence, validate output and evidence references, and test adversarial repositories.
 
 ### Retrieval poisoning
 A retrieved document contains misleading or malicious guidance that influences analysis.
@@ -19,7 +19,7 @@ A retrieved document contains misleading or malicious guidance that influences a
 ### Sensitive-data disclosure
 The model receives credentials, proprietary code, personal data, or unrelated files.
 
-**Controls:** Minimize evidence, redact secrets, apply data-classification rules, use approved providers and retention settings, and prohibit broad repository uploads by default.
+**Controls:** Minimize evidence, heuristically redact recognizable credentials from source context and model rationale/remediation, apply data-classification rules, use approved providers and retention settings, and prohibit broad repository uploads by default. Redaction is not guaranteed and must not replace source-sharing review.
 
 ### Tool misuse
 An agent is induced to run shell commands, access files, or perform GitHub writes.
@@ -57,4 +57,4 @@ A provider outage, model change, or compromised endpoint changes behavior or exp
 
 ## 4. Evaluation gate
 
-Before enabling AI, test direct and indirect prompt injection, data exfiltration attempts, malformed output, evidence fabrication, severity manipulation, unsafe patches, tool-call manipulation, and denial-of-service cases. Record model, prompt, and evaluation versions. AI output must remain advisory.
+Before enabling AI in a deployment, test direct and indirect prompt injection, data exfiltration attempts, malformed output, evidence fabrication, severity manipulation, unsafe patches, tool-call manipulation, and denial-of-service cases. Record model, prompt, and evaluation versions. AI output must remain advisory.

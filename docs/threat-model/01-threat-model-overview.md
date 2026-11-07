@@ -18,7 +18,7 @@ This threat model covers the local-first TALARIA MVP and its planned evolution i
 
 - Source code and repository metadata.
 - Finding details, snippets, and remediation notes.
-- SQLite database and backups.
+- SQLite database and backups; PostgreSQL database, password secret, and dumps in the selected Compose topology.
 - Hunter profiles and scan configuration.
 - API/CLI access and local filesystem permissions.
 - Future AI prompts, model responses, and provider credentials.
@@ -32,7 +32,7 @@ This threat model covers the local-first TALARIA MVP and its planned evolution i
 | TB-1 | Operator -> CLI/API | Unauthorized or malformed requests |
 | TB-2 | TALARIA -> filesystem/repository | Path traversal, symlink escape, excessive resource use |
 | TB-3 | Repository content -> scanner | Malicious or malformed input, regex/resource exhaustion |
-| TB-4 | TALARIA -> SQLite | Corruption, injection, broken references |
+| TB-4 | TALARIA -> SQLite/PostgreSQL | Corruption, injection, broken references, unsafe schema initialization |
 | TB-5 | Repository evidence -> AI model (future) | Direct/indirect prompt injection and data leakage |
 | TB-6 | TALARIA -> GitHub (future) | Credential misuse and unauthorized writes |
 | TB-7 | TALARIA -> notification provider (future) | Sensitive-data disclosure |

@@ -9,8 +9,14 @@ dist/
 build/
 *.egg-info/
 .talaria/
+backups/
 .env
 .DS_Store
+
+# Local credentials and signing material
+secrets/*
+!secrets/README.md
+!secrets/*.example
 
 # Local backups and generated data
 *.pre-*

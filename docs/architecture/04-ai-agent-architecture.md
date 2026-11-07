@@ -2,11 +2,11 @@
 
 ## 1. Status
 
-AI-assisted investigation is a future extension. The current MVP performs deterministic, rule-based triage. The presence of an adapter interface or placeholder package does not mean an LLM integration is operational.
+An authenticated, analyst-authorized endpoint and dashboard action can request opt-in analysis for a tenant-owned finding. Repository context is collected only when source sharing is enabled, from configured roots, with traversal/symlink and size limits; model output is schema-checked and evidence references are validated. The service has no tools and cannot authorize actions. Results are returned to the caller and audited without prompts or source text; a persisted investigation history, live provider evaluation, and adversarial testing remain incomplete. Deterministic triage remains the default.
 
 ## 2. Design objective
 
-An AI component may help explain a finding, identify missing context, compare remediation approaches, and draft a recommendation. It must not become the authority that decides whether an action is permitted.
+An opt-in provider-neutral AI adapter summarizes findings through an explicit authenticated request; scans do not call it automatically. It has no tools and cannot decide whether an action is permitted.
 
 ```text
 Finding + bounded evidence
@@ -15,7 +15,7 @@ Finding + bounded evidence
 Evidence minimization and redaction
         |
         v
-AI investigation adapter (future)
+Authenticated endpoint + opt-in AI investigation adapter
         |
         v
 Schema validation + policy checks
@@ -48,15 +48,7 @@ If tools are introduced later, expose narrow typed functions with server-side au
 
 ## 6. Output contract
 
-Require a strict structured response, for example:
-- `summary`
-- `likely_root_cause`
-- `supporting_evidence`
-- `counter_evidence`
-- `confidence`
-- `recommended_next_steps`
-- `suggested_remediation`
-- `limitations`
+Require the current strict structured response: `triage`, `rationale`, `confidence`, `evidence_refs`, and `remediation`. The adapter rejects malformed output and evidence references that were not supplied.
 
 Validate types, enumerations, maximum lengths, and references to evidence. Reject malformed output. The model may recommend a severity change, but a deterministic policy or authorized human must approve it.
 

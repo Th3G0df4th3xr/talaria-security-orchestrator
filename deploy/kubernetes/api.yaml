@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: talaria-api
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: talaria-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: talaria-repositories
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: talaria-api
+spec:
+  serviceName: talaria-api
+  replicas: 1
+  selector:
+    matchLabels:
+      app: talaria-api
+  template:
+    metadata:
+      labels:
+        app: talaria-api
+    spec:
+      serviceAccountName: talaria-api
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: talaria:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: TALARIA_DATABASE
+              value: /data/talaria.db
+            - name: TALARIA_ALLOWED_REPOSITORY_ROOTS
+              value: /repositories
+            - name: TALARIA_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: talaria-secrets
+                  key: jwt-secret
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: talaria-secrets
+                  key: github-webhook-secret
+                  optional: true
+            - name: GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: talaria-secrets
+                  key: github-app-id
+                  optional: true
+            - name: GITHUB_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: talaria-secrets
+                  key: github-installation-id
+                  optional: true
+            - name: GITHUB_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: talaria-secrets
+                  key: github-app-private-key
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: repositories
+              mountPath: /repositories
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: talaria-data
+        - name: repositories
+          persistentVolumeClaim:
+            claimName: talaria-repositories
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: talaria-api
+spec:
+  type: ClusterIP
+  selector:
+    app: talaria-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

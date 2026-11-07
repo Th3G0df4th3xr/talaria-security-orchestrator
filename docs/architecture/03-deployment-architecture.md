@@ -13,7 +13,9 @@ Operator workstation
   └── .talaria/talaria.db (local SQLite)
 ```
 
-This is a development/MVP topology, not a production deployment architecture.
+The default local Compose topology uses PostgreSQL and keeps the API and
+dashboard bound to host loopback. An optional Compose overlay adds Caddy for a
+single-VM HTTPS topology. Neither topology has been accepted on a live host.
 
 ## 2. Runtime prerequisites
 
@@ -33,11 +35,19 @@ The SQLite database is mutable state. Back it up before schema migrations or man
 
 ## 4. Network exposure
 
-The API has no authentication/RBAC in the current MVP. It must bind to loopback. A firewall is not a substitute for application authorization. Do not deploy this build to a public cloud, shared host, or team network.
+The API has JWT authentication, organization memberships, role checks, and
+tenant scoping for core routes. The base Compose listeners remain on loopback.
+For a VM deployment, the optional TLS overlay publishes Caddy on ports 80 and
+443, routes API and webhook paths to FastAPI and other paths to Streamlit, and
+configures Uvicorn to trust forwarded client addresses only from Caddy's
+reserved edge-network address. DNS, firewall, certificate issuance/renewal,
+and proxy behavior still require live acceptance. The Kubernetes manifest has
+no ingress or TLS configuration. A firewall is not a substitute for
+application authorization; no deployment topology is certified for public use.
 
-## 5. Future single-host deployment
+## 5. Single-host deployment boundary
 
-A hardened single-host deployment would require:
+A hardened single-host deployment still requires:
 - A dedicated service account with least-privilege filesystem access.
 - Explicit repository allowlists and read-only mounts where practical.
 - A managed secret store or OS credential facility.
@@ -54,7 +64,10 @@ Do not introduce distributed infrastructure until measured workload or availabil
 
 ## 7. Deployment verification checklist
 
-- [ ] Confirm API binds to loopback.
+- [ ] Keep API/dashboard host ports loopback-bound and verify Caddy is the only
+      public listener.
+- [ ] Verify DNS, firewall, TLS certificate issuance/renewal, and trusted
+      forwarded client addresses on the deployed VM.
 - [ ] Confirm no secrets are present in source, logs, or artifacts.
 - [ ] Confirm database backup and restore.
 - [ ] Run unit, integration, and security tests.
@@ -63,3 +76,7 @@ Do not introduce distributed infrastructure until measured workload or availabil
 - [ ] Verify scan limits and failure handling.
 - [ ] Verify audit records for registration and scan lifecycle.
 - [ ] Document rollback and recovery.
+
+The repository's current container baseline and limitations are documented in
+[Container deployment](../deployment/CONTAINER.md). The Compose and Kubernetes
+files have syntax tests; neither has been deployed to a live host or cluster.
